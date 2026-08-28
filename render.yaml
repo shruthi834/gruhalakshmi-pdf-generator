@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: gruhalakshmi-pdf-generator
+    env: docker
+    plan: free
+    region: singapore # or oregon / frankfurt
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: RAZORPAY_KEY_ID
+        sync: false # Set in Render Dashboard
+      - key: RAZORPAY_KEY_SECRET
+        sync: false # Set in Render Dashboard
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false # Set in Render Dashboard
+      - key: PAYMENT_AMOUNT
+        value: 100
+      - key: PAYMENT_CURRENCY
+        value: INR
