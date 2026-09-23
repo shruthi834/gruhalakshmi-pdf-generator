@@ -1,0 +1,38 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        BigInt   @id @default(autoincrement())
+  phone     String   @unique @db.VarChar(20)
+  name      String?  @db.VarChar(100)
+  createdAt DateTime @default(now())
+  downloads Download[]
+}
+
+model Resource {
+  id        BigInt   @id @default(autoincrement())
+  type      String   @db.VarChar(50)
+  title     String?  @db.VarChar(200)
+  url       String?
+  sizeBytes BigInt?
+  createdAt DateTime @default(now())
+  downloads Download[]
+}
+
+model Download {
+  id            BigInt   @id @default(autoincrement())
+  user          User     @relation(fields: [userId], references: [id])
+  userId        BigInt
+  resource      Resource? @relation(fields: [resourceId], references: [id])
+  resourceId    BigInt?
+  resourceType  String   @db.VarChar(50)
+  downloadedAt  DateTime @default(now())
+  clientIp      String?  @db.Inet
+}

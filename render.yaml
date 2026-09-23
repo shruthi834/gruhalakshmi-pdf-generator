@@ -1,20 +1,22 @@
 services:
   - type: web
-    name: gruhalakshmi-pdf-generator
-    env: docker
+    name: phone-download-service
+    env: node
     plan: free
-    region: singapore # or oregon / frankfurt
-    dockerfilePath: ./Dockerfile
+    buildCommand: npm install && npx prisma generate && npm run prisma migrate deploy
+    startCommand: npm start
     envVars:
-      - key: PORT
-        value: 8080
-      - key: RAZORPAY_KEY_ID
-        sync: false # Set in Render Dashboard
-      - key: RAZORPAY_KEY_SECRET
-        sync: false # Set in Render Dashboard
-      - key: RAZORPAY_WEBHOOK_SECRET
-        sync: false # Set in Render Dashboard
-      - key: PAYMENT_AMOUNT
-        value: 100
-      - key: PAYMENT_CURRENCY
-        value: INR
+      - key: DATABASE_URL
+        fromDatabase: postgres-db
+      - key: ADMIN_TOKEN
+        value: "CHANGE_ME_TO_STRONG_TOKEN"
+    autoDeploy: true
+
+  - type: postgresql
+    name: postgres-db
+    plan: free
+    region: oregon
+    databases:
+      - name: default
+        user: postgres
+        password: ${POSTGRES_PASSWORD}

@@ -1,0 +1,20 @@
+{
+  "name": "phone-download-service",
+  "version": "0.1.0",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "prisma": "prisma",
+    "migrate": "prisma migrate dev",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "prisma": "^5.15.0",
+    "@prisma/client": "^5.15.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Header from './components/Header';
 import FormCard from './components/FormCard';
 import PdfViewerSection from './components/PdfViewerSection';
+import LoginCard from './components/LoginCard';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { transliterateToKannada, isKannadaText } from './utils/kannadaTransliterate';
 import './App.css';
@@ -13,35 +14,41 @@ const EMPTY_FORM = {
 };
 
 export default function App() {
+  const [authToken, setAuthToken] = useState(() => sessionStorage.getItem('auth_token'));
+  const [userPhone, setUserPhone] = useState(() => sessionStorage.getItem('phone'));
   const [formData, setFormData] = useState(EMPTY_FORM);
-  const [paymentConfig, setPaymentConfig] = useState({ amount: 100, currency: 'INR', keyId: '' });
-  const [paymentStage, setPaymentStage] = useState('idle'); // 'idle' | 'creating' | 'checkout' | 'verifying' | 'success' | 'cancelled' | 'failed'
+  const [paymentStage, setPaymentStage] = useState('idle');
   const [paymentError, setPaymentError] = useState(null);
-  const [lastCapturedOrderId, setLastCapturedOrderId] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [toast, setToast] = useState(null);
 
-  useEffect(() => {
-    fetchPaymentConfig();
-  }, []);
-
-  const fetchPaymentConfig = async () => {
-    try {
-      const res = await fetch('/api/payment/config');
-      if (res.ok) {
-        const data = await res.json();
-        setPaymentConfig(data);
-      }
-    } catch (err) {
-      console.warn('Could not fetch payment config:', err);
-    }
-  };
+  const paymentConfig = { amount: 0, currency: 'INR', keyId: '' };
+  const lastCapturedOrderId = null;
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => {
-      setToast(null);
-    }, 4000);
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleLoginSuccess = (token, phone) => {
+    setAuthToken(token);
+    setUserPhone(phone);
+    showToast(`Logged in successfully as ${phone} 🎉`, 'success');
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('auth_token');
+    sessionStorage.removeItem('phone');
+    setAuthToken(null);
+    setUserPhone(null);
+    setFormData(EMPTY_FORM);
+    setPaymentStage('idle');
+    setPaymentError(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+    showToast('Logged out successfully');
   };
 
   const validateAndPreparePayload = () => {
@@ -49,12 +56,10 @@ export default function App() {
       showToast('Please select a Date (ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ)', 'error');
       return null;
     }
-
     if (!formData.rationCardNumber || !formData.rationCardNumber.trim()) {
       showToast('Please enter Ration Card Number (ಪಡಿತರ ಚೀಟಿ ಸಂಖ್ಯೆ ನಮೂದಿಸಿ)', 'error');
       return null;
     }
-
     if (!formData.name || !formData.name.trim()) {
       showToast('Please enter Beneficiary Name (ಹೆಸರನ್ನು ನಮೂದಿಸಿ)', 'error');
       return null;
@@ -65,7 +70,6 @@ export default function App() {
       finalName = transliterateToKannada(finalName);
       setFormData((prev) => ({ ...prev, name: finalName }));
     }
-
     if (!finalName || !isKannadaText(finalName)) {
       showToast('Please enter a valid Kannada name (ಕನ್ನಡದಲ್ಲಿ ಹೆಸರು ನಮೂದಿಸಿ)', 'error');
       return null;
@@ -78,7 +82,11 @@ export default function App() {
     };
   };
 
-  const handleProceedToPayment = async () => {
+  /**
+   * Directly generates and downloads the PDF via /api/pdf/generate.
+   * Completely bypasses any payment gateway.
+   */
+  const handleGeneratePdf = async () => {
     const payload = validateAndPreparePayload();
     if (!payload) return;
 
@@ -86,151 +94,56 @@ export default function App() {
       setPaymentStage('creating');
       setPaymentError(null);
 
-      // 1. Create Razorpay order on backend
-      const orderResponse = await fetch('/api/payment/create-order', {
+      const token = sessionStorage.getItem('auth_token');
+
+      const response = await fetch('/api/pdf/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
-      if (!orderResponse.ok) {
-        const errData = await orderResponse.json().catch(() => ({}));
-        throw new Error(errData.error || 'Unable to initiate payment. Please try again.');
-      }
-
-      const orderData = await orderResponse.json();
-      const { orderId, amount, currency, keyId } = orderData;
-
-      if (!window.Razorpay) {
-        throw new Error('Razorpay SDK not loaded. Please check your internet connection.');
-      }
-
-      setPaymentStage('checkout');
-
-      // 2. Open Razorpay Standard Checkout
-      const options = {
-        key: keyId || paymentConfig.keyId,
-        amount: amount,
-        currency: currency || 'INR',
-        name: 'Karnataka Government',
-        description: 'Gruha Lakshmi Sanction Order Fee',
-        order_id: orderId,
-        image: '/images/x6.png',
-        handler: async function (response) {
-          // 3. User paid -> verify payment on backend
-          await verifyPaymentAndDownloadPdf({
-            razorpayOrderId: response.razorpay_order_id || orderId,
-            razorpayPaymentId: response.razorpay_payment_id,
-            razorpaySignature: response.razorpay_signature,
-            rationCardNumber: payload.rationCardNumber
-          });
-        },
-        modal: {
-          ondismiss: function () {
-            setPaymentStage('cancelled');
-            showToast('Payment cancelled. No payment was completed.', 'error');
-          }
-        },
-        prefill: {
-          name: payload.name,
-          contact: ''
-        },
-        theme: {
-          color: '#e63946'
-        }
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (response) {
-        setPaymentStage('failed');
-        setPaymentError(response.error?.description || 'Payment failed. Please try again.');
-        showToast('Payment failed. Please try again.', 'error');
-      });
-
-      rzp.open();
-    } catch (err) {
-      console.error(err);
-      setPaymentStage('failed');
-      setPaymentError(err.message || 'Payment initiation failed');
-      showToast(err.message || 'Payment initiation failed', 'error');
-    }
-  };
-
-  const verifyPaymentAndDownloadPdf = async ({ razorpayOrderId, razorpayPaymentId, razorpaySignature, rationCardNumber }) => {
-    try {
-      setPaymentStage('verifying');
-
-      const response = await fetch('/api/payment/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          razorpayOrderId,
-          razorpayPaymentId,
-          razorpaySignature
-        }),
-      });
-
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || 'Payment verification failed');
+        throw new Error('Failed to generate PDF. Please check your inputs and try again.');
       }
 
-      // Received generated PDF from verified payment
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
 
       // Trigger automatic download
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Gruhalakshmi_Sanction_Order_${rationCardNumber || 'order'}.pdf`;
+      link.download = `Gruhalakshmi_Sanction_Order_${payload.rationCardNumber}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(url);
-      setLastCapturedOrderId(razorpayOrderId);
       setPaymentStage('success');
-
-      showToast('Payment verified & PDF downloaded successfully! 🎉', 'success');
+      showToast('PDF generated & downloaded successfully! 🎉', 'success');
     } catch (err) {
-      console.error('Payment verification error:', err);
+      console.error(err);
       setPaymentStage('failed');
-      setPaymentError(err.message || 'Payment verification failed. Please check with support.');
-      showToast(err.message || 'Payment verification failed', 'error');
+      setPaymentError(err.message || 'PDF generation failed. Please try again.');
+      showToast(err.message || 'PDF generation failed', 'error');
     }
   };
 
+  /** Re-download the already-generated PDF */
   const handleRetryDownload = async () => {
-    if (!lastCapturedOrderId) return;
-    try {
-      setPaymentStage('verifying');
-      const response = await fetch(`/api/payment/download/${lastCapturedOrderId}`);
-      if (!response.ok) {
-        throw new Error('Could not download PDF. Please try again.');
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-
+    if (previewUrl) {
       const link = document.createElement('a');
-      link.href = url;
-      link.download = `Gruhalakshmi_Sanction_Order_${formData.rationCardNumber || lastCapturedOrderId}.pdf`;
+      link.href = previewUrl;
+      link.download = `Gruhalakshmi_Sanction_Order_${formData.rationCardNumber || 'order'}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-      setPreviewUrl(url);
-      setPaymentStage('success');
-      showToast('PDF downloaded successfully!', 'success');
-    } catch (err) {
-      setPaymentStage('failed');
-      setPaymentError(err.message);
-      showToast(err.message, 'error');
+      showToast('PDF downloaded!', 'success');
+    } else {
+      await handleGeneratePdf();
     }
   };
 
@@ -238,7 +151,6 @@ export default function App() {
     setFormData(EMPTY_FORM);
     setPaymentStage('idle');
     setPaymentError(null);
-    setLastCapturedOrderId(null);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
@@ -248,45 +160,52 @@ export default function App() {
 
   return (
     <div className="app-container">
-      <Header />
+      <Header
+        authToken={authToken}
+        userPhone={userPhone}
+        onLogout={handleLogout}
+      />
 
       <main className="main-content">
-        <div className="hero-banner">
-          <h2>Gruha Lakshmi Sanction Order Generator</h2>
-          <p>
-            Official Karnataka Government Gruha Lakshmi Sanction Order Generator with instant Razorpay checkout.
-          </p>
-          <div className="kannada-tag">
-            ಕರ್ನಾಟಕ ಸರ್ಕಾರ - ಗೃಹಲಕ್ಷ್ಮಿ ಯೋಜನೆ ಮಂಜೂರಾತಿ ಪತ್ರ
-          </div>
-        </div>
+        {!authToken ? (
+          <LoginCard onLoginSuccess={handleLoginSuccess} />
+        ) : (
+          <>
+            <div className="hero-banner">
+              <h2>Gruha Lakshmi Sanction Order Generator</h2>
+              <p>
+                Official Karnataka Government Gruha Lakshmi Sanction Order Generator.
+              </p>
+              <div className="kannada-tag">
+                ಕರ್ನಾಟಕ ಸರ್ಕಾರ - ಗೃಹಲಕ್ಷ್ಮಿ ಯೋಜನೆ ಮಂಜೂರಾತಿ ಪತ್ರ
+              </div>
+            </div>
 
-        <div className="app-grid">
-          {/* Left Column: Form + Payment Checkout */}
-          <FormCard
-            formData={formData}
-            setFormData={setFormData}
-            onProceedToPayment={handleProceedToPayment}
-            onReset={handleReset}
-            paymentStage={paymentStage}
-            paymentError={paymentError}
-            paymentConfig={paymentConfig}
-            onRetryDownload={handleRetryDownload}
-            lastCapturedOrderId={lastCapturedOrderId}
-          />
+            <div className="app-grid">
+              <FormCard
+                formData={formData}
+                setFormData={setFormData}
+                onProceedToPayment={handleGeneratePdf}
+                onReset={handleReset}
+                paymentStage={paymentStage}
+                paymentError={paymentError}
+                paymentConfig={paymentConfig}
+                onRetryDownload={handleRetryDownload}
+                lastCapturedOrderId={lastCapturedOrderId}
+              />
 
-          {/* Right Column: PDF Preview (Only visible after verified payment) */}
-          <PdfViewerSection
-            previewUrl={previewUrl}
-            previewLoading={paymentStage === 'verifying'}
-            onRefresh={handleRetryDownload}
-            onDownload={handleRetryDownload}
-            formData={formData}
-          />
-        </div>
+              <PdfViewerSection
+                previewUrl={previewUrl}
+                previewLoading={paymentStage === 'creating'}
+                onRefresh={handleRetryDownload}
+                onDownload={handleRetryDownload}
+                formData={formData}
+              />
+            </div>
+          </>
+        )}
       </main>
 
-      {/* Toast Notification */}
       {toast && (
         <div className="toast-container">
           <div className={`toast ${toast.type}`}>
@@ -301,9 +220,7 @@ export default function App() {
       )}
 
       <footer className="site-footer">
-        <p>
-          Karnataka Government Gruha Lakshmi PDF Generator • Secure Payments by Razorpay
-        </p>
+        <p>Karnataka Government Gruha Lakshmi PDF Generator</p>
       </footer>
     </div>
   );

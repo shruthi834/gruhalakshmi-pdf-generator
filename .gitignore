@@ -1,20 +1,6 @@
-# Compiled Java & Maven output
-target/
-*.class
-
-# Node / React build output & dependencies
+# .gitignore
 node_modules/
-frontend/node_modules/
-frontend/dist/
-
-# IDE & Editor files
-.idea/
-*.iml
-.vscode/
-*.swp
+.env
 .DS_Store
-
-# Logs & temp files
-*.log
-scratch/
-personal-project.zip
+prisma/*.db
+prisma/migrations/

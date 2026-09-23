@@ -156,15 +156,7 @@ public class PdfService {
                 // 1. Draw shaped 3-line paragraph overlay
                 cs.drawImage(paraPdImage, pdfX, pdfY, pdfW, pdfH);
 
-                // 2. Explicitly restore / guarantee outer border line continuity
-                cs.saveGraphicsState();
-                cs.setStrokingColor(Color.BLACK);
-                cs.setLineWidth(1.0f);
-                // Right vertical border line
-                cs.moveTo(780.45f, 437.25f);
-                cs.lineTo(780.45f, 1104.75f);
-                cs.stroke();
-                cs.restoreGraphicsState();
+
 
                 // 3. Order Number (GL- ...) at bottom of box
                 maskArea(cs, 225f, 508f, 250f, 22f);
@@ -175,10 +167,10 @@ public class PdfService {
                 maskArea(cs, 666f, 472f, 104f, 104f);
                 cs.drawImage(qrPdImage, 668.887f, 474.75f, 99f, 99f);
 
-                // 5. Header URL (Top Right)
-                maskArea(cs, 490f, 1175f, 350f, 16f);
-                String fullHeaderUrl = "https://sevasindhugs1.karnataka.gov.in/gl-step/auth/print_order.php?rc=" + rcNumber;
-                drawText(cs, segoeRegularPdfFont, 10f, darkBlack, 494.85f, 1182.0f, fullHeaderUrl);
+                // 5. Remove top header line completely (Firefox on top-left and URL on top-right)
+                float topHeaderY = 1160f;
+                float topHeaderHeight = Math.max(50f, page.getMediaBox().getHeight() - topHeaderY);
+                maskArea(cs, 0f, topHeaderY, page.getMediaBox().getWidth(), topHeaderHeight);
 
                 // 6. Footer Date (Bottom Right)
                 maskArea(cs, 740f, 0f, 100f, 16f);

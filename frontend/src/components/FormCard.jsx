@@ -166,39 +166,25 @@ export default function FormCard({
           )}
         </div>
 
-        {/* Payment Fee Info Card */}
+        {/* Info box */}
         <div className="payment-info-box">
           <div className="payment-info-header">
             <div className="payment-amount-label">
               <ShieldCheck size={18} color="#06d6a0" />
-              <span>Generation Fee:</span>
-            </div>
-            <div className="payment-amount-val">
-              <span>₹{amountToDisplay}</span>
+              <span>Official Sanction Order PDF</span>
             </div>
           </div>
           <p className="payment-info-sub">
-            Payment is securely processed via <strong>Razorpay Standard Checkout</strong>. PDF will be generated immediately upon verified payment.
+            Enter the details above and click <strong>Generate PDF</strong> to download your official Gruha Lakshmi Sanction Order.
           </p>
         </div>
-
-        {/* Cancellation Message */}
-        {paymentStage === 'cancelled' && (
-          <div className="status-banner banner-warning">
-            <AlertCircle size={18} />
-            <div>
-              <p className="status-title">Payment Cancelled</p>
-              <p className="status-desc">No payment was completed and the PDF has not been generated.</p>
-            </div>
-          </div>
-        )}
 
         {/* Failure Message */}
         {paymentStage === 'failed' && (
           <div className="status-banner banner-error">
             <AlertCircle size={18} />
             <div>
-              <p className="status-title">Payment Failed</p>
+              <p className="status-title">Generation Failed</p>
               <p className="status-desc">{paymentError || 'Please try again.'}</p>
             </div>
           </div>
@@ -209,15 +195,15 @@ export default function FormCard({
           <div className="status-banner banner-success">
             <CheckCircle2 size={18} />
             <div>
-              <p className="status-title">Payment Verified &amp; Captured!</p>
-              <p className="status-desc">Your official Sanction Order PDF has been generated successfully.</p>
+              <p className="status-title">PDF Generated Successfully!</p>
+              <p className="status-desc">Your official Sanction Order PDF has been downloaded.</p>
             </div>
           </div>
         )}
 
         {/* Action Buttons */}
         <div className="button-stack">
-          {paymentStage === 'success' && lastCapturedOrderId ? (
+          {paymentStage === 'success' ? (
             <button
               type="button"
               className="btn-primary"
@@ -237,27 +223,17 @@ export default function FormCard({
               {paymentStage === 'creating' ? (
                 <>
                   <span className="spinner"></span>
-                  <span>Creating payment order...</span>
-                </>
-              ) : paymentStage === 'verifying' ? (
-                <>
-                  <span className="spinner"></span>
-                  <span>Payment successful! Generating your PDF...</span>
-                </>
-              ) : paymentStage === 'cancelled' ? (
-                <>
-                  <Lock size={18} />
-                  <span>Pay Again (₹{amountToDisplay}) &amp; Generate PDF</span>
+                  <span>Generating PDF...</span>
                 </>
               ) : paymentStage === 'failed' ? (
                 <>
                   <RefreshCw size={18} />
-                  <span>Try Again (₹{amountToDisplay})</span>
+                  <span>Try Again</span>
                 </>
               ) : (
                 <>
                   <Lock size={18} />
-                  <span>Proceed to Payment (₹{amountToDisplay})</span>
+                  <span>Generate PDF</span>
                 </>
               )}
             </button>
